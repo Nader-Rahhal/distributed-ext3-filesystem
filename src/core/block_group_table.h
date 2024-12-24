@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-struct ext2_block_group_descriptor {
+struct ext3_block_group_descriptor {
     uint32_t addr_block_usage_bitmap;
     uint32_t addr_inode_usage_bitmap;
     uint32_t addr_inode_table;
