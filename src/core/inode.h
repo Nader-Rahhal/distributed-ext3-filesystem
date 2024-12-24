@@ -1,7 +1,6 @@
 #include <stdint.h>
 
 struct ext2_inode {
-
     uint16_t type_and_permissions;
     u_int16_t user_id;
     u_int32_t size_lower_32;
