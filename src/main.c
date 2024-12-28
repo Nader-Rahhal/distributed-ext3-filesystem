@@ -10,7 +10,7 @@
 int main(int argc, char *argv[])
 {
 
-    int fd = open("../disks/test_disk.img", O_RDWR);
+    int fd = open("./disks/test_disk.img", O_RDWR);
     if (fd < 0)
     {
         perror("Error opening disk image");
