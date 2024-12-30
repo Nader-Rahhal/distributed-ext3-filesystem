@@ -10,9 +10,7 @@
 #include <fcntl.h>
 
 #include "../ext3_operations.c"
-#include "../../env.c"
-
-extern char ip_addr[];
+#include "../../env.h"
 
 int main(){
     int server_socket = socket(AF_INET, SOCK_STREAM, 0);

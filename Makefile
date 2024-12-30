@@ -15,8 +15,8 @@ test_disk.img: | $(DISK_DIR)
 $(DISK_DIR):
 	mkdir -p $(DISK_DIR)
 
-server: $(SRC_DIR)/server/server.c
-	$(CC) -o server $(SRC_DIR)/server/server.c
+server: $(SRC_DIR)/server/server.c env.c
+	$(CC) -o server $(SRC_DIR)/server/server.c env.c
 
-client: $(SRC_DIR)/client/client.c
+client: $(SRC_DIR)/client/client.c 
 	$(CC) -o client $(SRC_DIR)/client/client.c
