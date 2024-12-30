@@ -1,0 +1,1 @@
+extern char ip_addr[];

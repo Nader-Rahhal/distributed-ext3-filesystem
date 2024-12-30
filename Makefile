@@ -1,5 +1,7 @@
 DISK_DIR = ./disks
 SRC_DIR = ./src
+SERVER_DIR = /server
+CLIENT_DIR = /client
 CC = gcc
 
 main: $(SRC_DIR)/main.c
@@ -12,3 +14,9 @@ test_disk.img: | $(DISK_DIR)
 
 $(DISK_DIR):
 	mkdir -p $(DISK_DIR)
+
+server: $(SRC_DIR)/server/server.c
+	$(CC) -o server $(SRC_DIR)/server/server.c
+
+client: $(SRC_DIR)/client/client.c
+	$(CC) -o client $(SRC_DIR)/client/client.c
