@@ -116,20 +116,20 @@ int update_block_bitmap_and_return_free_block(int fd, uint32_t bytes_to_read, ui
     return -1;
 }
 
-void update_group_table_descriptor(int fd, size_t group, struct ext3_superblock *sb, struct ext3_block_group_descriptor *bgd, unsigned int add)
+void update_group_table_descriptor(int fd, size_t group, struct ext3_superblock *sb, struct ext3_block_group_descriptor *bgd, unsigned int new_inodes, unsigned int new_blocks)
 {
-    bgd[group].unallocated_blocks_in_group += add;
-    bgd[group].unallocated_inodes_in_group += add;
+    bgd[group].unallocated_blocks_in_group += new_blocks;
+    bgd[group].unallocated_inodes_in_group += new_inodes;
     uint32_t addr_of_table_desc = 2048 + (group * 32);
     lseek(fd, addr_of_table_desc, SEEK_SET);
     write(fd, &bgd[group], sizeof(bgd[group]));
     return;
 }
 
-void update_superblock(int fd, struct ext3_superblock *sb, unsigned int add)
+void update_superblock(int fd, struct ext3_superblock *sb, unsigned int new_inodes, unsigned int new_blocks)
 {
-    sb->unallocated_blocks += add;
-    sb->unallocated_inodes += add;
+    sb->unallocated_blocks += new_blocks;
+    sb->unallocated_inodes += new_inodes;
     lseek(fd, 1024, SEEK_SET);
     write(fd, sb, sizeof(struct ext3_superblock));
     return;
@@ -312,10 +312,10 @@ void ext3_delete(int fd, struct ext3_block_group_descriptor *bgd, struct ext3_su
     // 4. Clear Entry from Root
 
     // 5. Adjust Superblock
-    update_superblock(fd, sb, 1);
+    update_superblock(fd, sb, 1, 1);
 
     // 6. Adjust Table Descriptor
-    update_group_table_descriptor(fd, 0, sb, bgd, 1);
+    update_group_table_descriptor(fd, 0, sb, bgd, 1, 1);
 
     return;
 
@@ -323,6 +323,67 @@ void ext3_delete(int fd, struct ext3_block_group_descriptor *bgd, struct ext3_su
     // 4. Clear Entry from Root
     
     // 6. Adjust Table Descriptor
+}
+
+void ext3_write(int fd, struct ext3_block_group_descriptor *bgd, uint32_t inode_number, uint32_t offset, uint32_t block_size, struct ext3_superblock *sb, const char *buffer, uint32_t length) {
+    // 1. Check Inode Struct for Blocks
+    uint32_t block_group = (inode_number - 1) / sb->inodes_per_group;
+    uint32_t inode_table_offset = bgd[block_group].addr_inode_table * block_size;
+    int rc = lseek(fd, inode_table_offset + (inode_number - 1) * sizeof(struct ext3_inode), SEEK_SET);
+    struct ext3_inode inode;
+    rc = read(fd, &inode, sizeof(struct ext3_inode));
+    
+    uint32_t block_num = offset / 4096;
+    uint32_t block_offset = offset % 4096;
+    
+    if (block_num >= 12) {
+        printf("Beyond direct pointer implementation\n");
+        return;
+    }
+
+    if (inode.block[block_num] == 0) {
+        // Need to allocate new block
+        int free_block = update_block_bitmap_and_return_free_block(fd, sb->blocks_per_group / 8, 
+                                                                 block_size, bgd, sb);
+        if (free_block < 0) {
+            printf("No free blocks available\n");
+            return;
+        }
+        
+        // Update inode with new block
+        inode.block[block_num] = free_block;
+        
+        // Write back updated inode
+        lseek(fd, inode_table_offset + (inode_number - 1) * sizeof(struct ext3_inode), SEEK_SET);
+        write(fd, &inode, sizeof(struct ext3_inode));
+        
+        // Write data to new block
+        lseek(fd, free_block * block_size + block_offset, SEEK_SET);
+        write(fd, buffer, length);
+        
+        // Update inode size if needed
+        if (offset + length > inode.size) {
+            inode.size = offset + length;
+            lseek(fd, inode_table_offset + (inode_number - 1) * sizeof(struct ext3_inode), SEEK_SET);
+            write(fd, &inode, sizeof(struct ext3_inode));
+        }
+    } else {
+        // Block exists, just write to it
+        lseek(fd, inode.block[block_num] * block_size + block_offset, SEEK_SET);
+        write(fd, buffer, length);
+        
+        // Update inode size if needed
+        if (offset + length > inode.size) {
+            inode.size = offset + length;
+            lseek(fd, inode_table_offset + (inode_number - 1) * sizeof(struct ext3_inode), SEEK_SET);
+            write(fd, &inode, sizeof(struct ext3_inode));
+        }
+    }
+
+    // Update Table Descriptor
+    update_group_table_descriptor(fd, block_group, sb, bgd, -1, -1);
+    // Update Superblock
+    update_superblock(fd, sb, 0, -1);
 }
 
 int ext3_open(int fd, char path[], uint32_t block_size, struct ext3_block_group_descriptor *bgd)
@@ -435,65 +496,6 @@ int ext3_open(int fd, char path[], uint32_t block_size, struct ext3_block_group_
     return 0;
 }
 
-void ext3_create(int fd, struct ext3_block_group_descriptor *bgd, uint32_t real_block_size, struct ext3_superblock *sb, const char *buffer, uint32_t length, const char *filename)
-{
-
-    // 1. Find free inode in inode bitmap
-    for (size_t i = 0; i < sizeof(bgd); i++)
-    {
-        uint32_t inode_bitmap_addr = bgd[i].addr_inode_usage_bitmap;
-        uint32_t inode_table_addr = bgd[i].addr_inode_table;
-        int rc = lseek(fd, inode_bitmap_addr * real_block_size, SEEK_SET);
-        uint8_t bitmap[sb->inodes_per_group / 8];
-        read(fd, &bitmap, sizeof(bitmap));
-
-        printf("Bitmap contents of bitmap %zu:\n", i);
-        int bytes_to_read = sb->inodes_per_group / 8;
-        for (int j = 0; j < bytes_to_read; j++)
-        {
-            if (bitmap[j] != 0xff)
-            {
-                uint8_t byte = bitmap[j];
-                int bit_position = 0;
-                while (bit_position < 8)
-                {
-                    if (!(byte & (1 << bit_position)))
-                    {
-                        int absolute_bit_position = (j * 8) + bit_position;
-                        int inode_number = absolute_bit_position + 1; // +1 because inodes start at 1
-                        printf("\nFound first free inode: %d in inode map %zu\n", inode_number, i);
-
-                        // 2. Update Inode Number in Inode Bitmap
-                        bitmap[j] = byte | (1 << bit_position);
-                        lseek(fd, inode_bitmap_addr * real_block_size, SEEK_SET);
-                        write(fd, bitmap, sizeof(bitmap));
-
-                        // 3. Find free block in block bitmap
-                        int free_block = update_block_bitmap_and_return_free_block(fd, sb->blocks_per_group / 8, real_block_size, bgd, sb);
-
-                        // 4. Update Inode Table by creating inode
-                        update_inode_table(fd, real_block_size, bgd, inode_number, free_block, length);
-
-                        // 5. Write the Actial File Data to Block
-                        update_data_block(fd, free_block, real_block_size, buffer, length);
-
-                        // 6. Update Table Descriptor
-                        update_group_table_descriptor(fd, i, sb, bgd, -1);
-
-                        // 7. Update Superblock
-                        update_superblock(fd, sb, -1);
-
-                        // 8. Update Root Directory
-                        update_root_directory(fd, inode_number, filename, real_block_size, bgd);
-
-                        return;
-                    }
-                    bit_position++;
-                }
-            }
-        }
-    }
-}
 
 void ext3_read_file_contents(int fd, uint32_t inode_number, uint32_t block_size, struct ext3_block_group_descriptor *bgd)
 {
