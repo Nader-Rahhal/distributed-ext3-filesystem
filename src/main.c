@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "ext3_operations.c"
+#include "ext3_operations.h"
 
 int main(int argc, char *argv[])
 {
@@ -43,12 +43,12 @@ int main(int argc, char *argv[])
         ext3_read_file_contents(fd, atoi(argv[2]), real_block_size, bgd);
     }
 
-    if (strcmp(argv[1], "-rr") == 0)
+    else if (strcmp(argv[1], "-rr") == 0)
     {
-        ext3_read_root_directory(fd, 2, real_block_size, bgd);
+        ext3_read_root(fd, 2, real_block_size, bgd);
     }
 
-    if (strcmp(argv[1], "-w") == 0)
+    else if (strcmp(argv[1], "-w") == 0)
     {
         char filename[256];
         printf("Input File Name: ");
@@ -59,7 +59,18 @@ int main(int argc, char *argv[])
         scanf("%s", contents);
 
         uint32_t content_length = strlen(contents);
-        ext3_write(fd, bgd, real_block_size, &sb, contents, content_length, filename);
+        ext3_create(fd, bgd, real_block_size, &sb, contents, content_length, filename);
+    }
+
+    else if (strcmp(argv[1], "-d") == 0){
+        ext3_delete(fd, bgd, &sb, atoi(argv[2]), real_block_size);
+    }
+
+    else if (strcmp(argv[1], "-o") == 0){
+        char buffer[] = "/test2";
+        printf("Size: %zu\n", sizeof(buffer));
+        int inode = ext3_open(fd, buffer, real_block_size, bgd);
+        printf("Inode: %d\n", inode);
     }
 
     // directry support

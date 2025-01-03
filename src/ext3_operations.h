@@ -18,11 +18,21 @@ void update_superblock(int fd, struct ext3_superblock *sb);
 
 void update_group_table_descriptor(int fd, size_t group, struct ext3_superblock *sb, struct ext3_block_group_descriptor *bgd);
 
-void ext3_write(int fd, struct ext3_block_group_descriptor *bgd, uint32_t real_block_size, struct ext3_superblock *sb, const char *buffer, uint32_t length, const char *filename);
+void delete_inode_bitmap_entry(int fd, struct ext3_block_group_descriptor *bgd, struct ext3_superblock *sb, uint32_t inode_tbd, uint32_t block_size);
+
+int ext3_open(int fd, char path[], uint32_t block_size, struct ext3_block_group_descriptor *bgd);
+
+void ext3_create(int fd, struct ext3_block_group_descriptor *bgd, uint32_t real_block_size, struct ext3_superblock *sb, const char *buffer, uint32_t length, const char *filename);
 
 void ext3_read_file_contents(int fd, uint32_t inode_number, uint32_t block_size, struct ext3_block_group_descriptor *bgd);
 
-void ext3_read_root_directory(int fd, uint32_t inode_number, uint32_t block_size, struct ext3_block_group_descriptor *bgd);
+void ext3_delete(int fd, struct ext3_block_group_descriptor *bgd, struct ext3_superblock *sb, uint32_t inode_tbd, uint32_t block_size);
+
+void ext3_read();
+
+void ext3_write();
+
+void ext3_read_root(int fd, uint32_t inode_number, uint32_t block_size, struct ext3_block_group_descriptor *bgd);
 
 
 
