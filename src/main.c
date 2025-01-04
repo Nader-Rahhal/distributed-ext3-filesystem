@@ -49,29 +49,42 @@ int main(int argc, char *argv[])
     }
 
     else if (strcmp(argv[1], "-w") == 0)
-{
-    uint32_t inode_number;
-    uint32_t offset;
-    char contents[256];
-    
-    printf("Input inode number: ");
-    scanf("%u", &inode_number);
-    
-    printf("Input offset: ");
-    scanf("%u", &offset);
-    
-    printf("Input File Contents: ");
-    scanf("%s", contents);
-    
-    uint32_t content_length = strlen(contents);
-    ext3_write(fd, bgd, inode_number, offset, real_block_size, &sb, contents, content_length);
-}
+    {
+        uint32_t inode_number;
+        uint32_t offset;
+        char contents[256];
 
-    else if (strcmp(argv[1], "-d") == 0){
+        printf("Input inode number: ");
+        scanf("%u", &inode_number);
+
+        printf("Input offset: ");
+        scanf("%u", &offset);
+
+        printf("Input File Contents: ");
+        scanf("%s", contents);
+
+        uint32_t content_length = strlen(contents);
+        ext3_write(fd, bgd, inode_number, offset, real_block_size, &sb, contents, content_length);
+    }
+
+    else if (strcmp(argv[1], "-c") == 0)
+    {
+
+        char filename[256];
+
+        printf("Input File Name: ");
+        scanf("%s", filename);
+
+        ext3_create_file(fd, bgd, real_block_size, &sb, filename);
+    }
+
+    else if (strcmp(argv[1], "-d") == 0)
+    {
         ext3_delete(fd, bgd, &sb, atoi(argv[2]), real_block_size);
     }
 
-    else if (strcmp(argv[1], "-o") == 0){
+    else if (strcmp(argv[1], "-o") == 0)
+    {
         char buffer[] = "/test2";
         printf("Size: %zu\n", sizeof(buffer));
         int inode = ext3_open(fd, buffer, real_block_size, bgd);

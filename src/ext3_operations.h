@@ -30,7 +30,7 @@ void ext3_read_file_contents(int fd, uint32_t inode_number, uint32_t block_size,
 
 void ext3_delete(int fd, struct ext3_block_group_descriptor *bgd, struct ext3_superblock *sb, uint32_t inode_tbd, uint32_t block_size);
 
-void ext3_read();
+int ext3_create_file(int fd, struct ext3_block_group_descriptor *bgd, uint32_t real_block_size, struct ext3_superblock *sb, const char *filename);
 
 void ext3_read_root(int fd, uint32_t inode_number, uint32_t block_size, struct ext3_block_group_descriptor *bgd);
 
