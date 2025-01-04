@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
 
     if (strcmp(argv[1], "-r") == 0)
     {
-        ext3_read_file_contents(fd, atoi(argv[2]), real_block_size, bgd);
+        ext3_read_file_contents(fd, atoi(argv[2]), real_block_size, bgd, 0);
     }
 
     else if (strcmp(argv[1], "-rr") == 0)

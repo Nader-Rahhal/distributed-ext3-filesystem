@@ -323,10 +323,8 @@ void clear_directory_entry(int fd, struct ext3_block_group_descriptor *bgd, uint
 
 void ext3_delete(int fd, struct ext3_block_group_descriptor *bgd, struct ext3_superblock *sb, uint32_t inode_tbd, uint32_t block_size)
 {
-    // 1. Alter Inode Bitmap
     delete_inode_bitmap_entry(fd, bgd, sb, inode_tbd, block_size);
 
-    // 1.5. Get Inode Struct
     uint32_t block_group_containing_inode = (inode_tbd - 1) / sb->inodes_per_group;
     uint32_t inode_table_offset = bgd[block_group_containing_inode].addr_inode_table * block_size;
     uint32_t inode_offset = ((inode_tbd - 1) * sizeof(struct ext3_inode)) + inode_table_offset;
@@ -335,21 +333,16 @@ void ext3_delete(int fd, struct ext3_block_group_descriptor *bgd, struct ext3_su
     struct ext3_inode target_inode;
     read(fd, &target_inode, sizeof(target_inode));
 
-    // 2. Alter Block Bitmap(s)
     delete_block_bitmap_entries(fd, bgd, sb, target_inode, block_size);
 
-    // 3. Clear Directory Entry
     clear_directory_entry(fd, bgd, block_size, inode_tbd);
 
-    // 4. Zero out the inode
     memset(&target_inode, 0, sizeof(target_inode));
     lseek(fd, inode_offset, SEEK_SET);
     write(fd, &target_inode, sizeof(target_inode));
 
-    // 5. Adjust Superblock
     update_superblock(fd, sb, 1, 1);
 
-    // 6. Adjust Table Descriptor
     update_group_table_descriptor(fd, 0, sb, bgd, 1, 1);
 }
 
@@ -571,73 +564,58 @@ int ext3_create_file(int fd, struct ext3_block_group_descriptor *bgd, uint32_t r
 }
 
 
-void ext3_read_file_contents(int fd, uint32_t inode_number, uint32_t block_size, struct ext3_block_group_descriptor *bgd)
+char* ext3_read_file_contents(int fd, uint32_t inode_number, uint32_t block_size, struct ext3_block_group_descriptor *bgd, uint32_t *total_size)
 {
-    // Calculate offset to inode table
     uint32_t inode_table_offset = bgd[0].addr_inode_table * block_size;
-
-    // Seek to the specific inode
     int rc = lseek(fd, inode_table_offset + (inode_number - 1) * sizeof(struct ext3_inode), SEEK_SET);
-    if (rc < 0)
-    {
-        perror("Error seeking to inode");
-        return;
+    if (rc < 0) {
+        return NULL;
     }
 
-    // Read the inode
     struct ext3_inode inode;
     rc = read(fd, &inode, sizeof(struct ext3_inode));
-    if (rc < 0)
-    {
-        perror("Error reading inode");
-        return;
+    if (rc < 0) {
+        return NULL;
     }
 
-    printf("File size: %u bytes\n", inode.size);
+    // Allocate buffer for entire file
+    char* file_contents = malloc(inode.size + 1);  // +1 for null terminator
+    if (!file_contents) return NULL;
+    
+    uint32_t total_bytes_read = 0;
 
-    // Read direct blocks
-    for (int i = 0; i < 12; i++)
-    {
-        if (inode.block[i] == 0)
-        {
-            break; // No more blocks to read
-        }
+    // Read blocks
+    for (int i = 0; i < 12; i++) {
+        if (inode.block[i] == 0) break;
 
-        // Calculate block address
         uint32_t block_addr = inode.block[i] * block_size;
         rc = lseek(fd, block_addr, SEEK_SET);
-        if (rc < 0)
-        {
-            perror("Error seeking to data block");
-            return;
+        if (rc < 0) {
+            free(file_contents);
+            return NULL;
         }
 
-        // Read block contents
         unsigned char block_buffer[block_size];
         rc = read(fd, block_buffer, block_size);
-        if (rc < 0)
-        {
-            perror("Error reading data block");
-            return;
+        if (rc < 0) {
+            free(file_contents);
+            return NULL;
         }
 
-        // Calculate how much of this block to print
-        uint32_t bytes_to_print = block_size;
-        if (i == 11 || inode.block[i + 1] == 0)
-        { // Last block
+        uint32_t bytes_to_copy = block_size;
+        if (i == 11 || inode.block[i + 1] == 0) {
             uint32_t bytes_so_far = i * block_size;
-            if (inode.size > bytes_so_far)
-            {
-                bytes_to_print = inode.size - bytes_so_far;
+            if (inode.size > bytes_so_far) {
+                bytes_to_copy = inode.size - bytes_so_far;
             }
         }
 
-        // Print block contents
-        printf("Block %d contents:\n", inode.block[i]);
-        for (uint32_t j = 0; j < bytes_to_print; j++)
-        {
-            printf("%c", block_buffer[j]);
-        }
-        printf("\n");
+        memcpy(file_contents + total_bytes_read, block_buffer, bytes_to_copy);
+        total_bytes_read += bytes_to_copy;
     }
+
+    file_contents[total_bytes_read] = '\0';  // Null terminate
+    *total_size = total_bytes_read;
+    
+    return file_contents;
 }
